@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <!-- Required meta tags -->
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+  <!-- Bootstrap CSS -->
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.0/css/all.css" integrity="sha384-lZN37f5QGtY3VHgisS14W3ExzMWZxybE1SJSEsQp9S+oqd12jhcu+A56Ebc1zFSJ" crossorigin="anonymous">
+
+  <title>paketci</title>
+  <style>
+    html {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+    }
+    .alert {
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+
+<body class="container h-100">
+  <div class="d-flex justify-content-center align-items-center h-100">
+    <div class="spinner-border" role="status">
+      <span class="sr-only">Loading...</span>
+    </div>
+  </div>
+  <script>
+    var dependencies = <%- JSON.stringify(dependencies) %>;
+  </script>
+
+  <!-- Optional JavaScript -->
+  <!-- jQuery first, then Popper.js, then Bootstrap JS -->
+  <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"
+    integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj"
+    crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"
+    integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo"
+    crossorigin="anonymous"></script>
+  <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/js/bootstrap.min.js"
+    integrity="sha384-OgVRvuATP1z7JjHLkuOU7Xw704+h835Lr+6QL9UvYjZE3Ipu6Tp75j7Bh/kR0JKI"
+    crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/mithril/mithril.js"></script>
+  <script src="https://unpkg.com/lodash@4.17.15/lodash.js"></script>
+  <script>
+    var root = document.body;
+
+    var setPackage = (packageIndex, newItems) => {
+      _.forEach(newItems, (value, key) => {
+        _.set(
+          dependencies,
+          [
+            packageIndex,
+            key
+          ],
+          value
+        );
+      })
+
+      m.redraw()
+    }
+
+    var VersionSelector = {
+      oncreate: function ({ attrs }) {
+
+      },
+      onchange: (e) => {
+        const { name, value: newVersion } = e.target;
+
+        const packageIndex = _.findIndex(dependencies, { name });
+
+        setPackage(packageIndex, {
+          isLock: true,
+          message: {
+            type: 'info',
+            text: 'updating...'
+          }
+        })
+
+        m.request({
+          method: "PUT",
+          url: "/api/update",
+          body: { name, newVersion }
+        })
+        .then((response) => {
+          setPackage(packageIndex, {
+            isLock: false,
+            currentVersion: newVersion,
+            message: {
+              type: 'success',
+              text: response.stdout
+            }
+          })
+        })
+        .catch(() => {
+          setPackage(packageIndex, {
+            isLock: false,
+            message: {
+              type: 'danger',
+              text: 'something went wrong'
+            }
+          })
+        })
+      },
+      view: function (vnode) {
+        var currentVersion = vnode.attrs.currentVersion.replace('^', '');
+
+        return m('select.form-control.input-sm', {
+          style: "width: 150px",
+          onchange: VersionSelector.onchange,
+          name: vnode.attrs.name,
+          disabled: vnode.attrs.isLock,
+        }, (
+          vnode.attrs.versions.map(version => (
+            m('option', {
+              selected: version === currentVersion,
+            }, version)
+          ))
+        ))
+      }
+    }
+
+    var Loading = m("div", {"class":"spinner-border","role":"status"}, 
+      m("span", {"class":"sr-only"}, 
+        "Loading..."
+      )
+    )
+
+    var App = {
+      deletePackage: (name) => {
+        const packageIndex = _.findIndex(dependencies, { name });
+
+        setPackage(packageIndex, {
+          isLock: true,
+          message: {
+            type: 'info',
+            text: 'uninstalling...'
+          }
+        })
+
+        m.request({
+          method: "POST",
+          url: "/api/delete",
+          body: { name }
+        })
+        .then(() => {
+          _.remove(dependencies, { name })
+        })
+      },
+      view: function (vnode) {
+        return m("table.table.table-striped", [
+          m("thead",
+            m("tr",
+              [
+                m("th", { "scope": "col" },
+                  "#"
+                ),
+                m("th", { "scope": "col" },
+                  "name"
+                ),
+                m("th", { "scope": "col" },
+                  "version"
+                ),
+                m("th", { "scope": "col" },
+                  ""
+                )
+              ]
+            )
+          ),
+          m("tbody",
+            dependencies.map(({ name, currentVersion, message, isLock, versions }, index) => (
+              [
+                m(`tr.bg-${currentVersion.replace('^', '') === _.last(versions) ? 'success' : 'warning'}`,
+                  [
+                    m("th", { "scope": "row" },
+                      index + 1
+                    ),
+                    m("td",
+                      name
+                    ),
+                    m("td",
+                      m(VersionSelector, { name, currentVersion, isLock, versions })
+                    ),
+                    m("td",
+                      m("button.btn.btn-danger.btn-sm", {
+                        disabled: isLock,
+                        onclick: () => {
+                          if (window.confirm("are you sure?")) {
+                            App.deletePackage(name)
+                          }
+                        }
+                      }, (
+                        m("i.fas.fa-trash")
+                      ))
+                    ),
+                  ]
+                ),
+                !!message && m("tr", [
+                  m("td.p-0[colspan=4]",
+                    m(`div.alert.alert-${message.type}.rounded-0.mb-0`, [
+                      message.text,
+                      !isLock && m("button.close[type='button'][data-dismiss='alert'][aria-label='Close']", 
+                        m("span[aria-hidden='true']", 
+                          m.trust("&times;")
+                        ),
+                      )
+                    ])
+                  )
+                ]),
+              ]
+            )),
+          ),
+        ])
+      }
+    }
+
+    m.mount(root, App)
+  </script>
+</body>
+
+</html>
