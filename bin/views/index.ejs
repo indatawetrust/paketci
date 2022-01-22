@@ -107,7 +107,7 @@
         })
       },
       view: function (vnode) {
-        var currentVersion = vnode.attrs.currentVersion.replace('^', '');
+        var currentVersion = vnode.attrs.currentVersion.replace(/[\^~]/g, '');
 
         return m('select.form-control.input-sm', {
           style: "width: 150px",
@@ -117,7 +117,8 @@
         }, (
           vnode.attrs.versions.map(version => (
             m('option', {
-              selected: version === currentVersion,
+              value: currentVersion,
+              selected: version?.replace(/[\^~]/g, '') === currentVersion,
             }, version)
           ))
         ))
