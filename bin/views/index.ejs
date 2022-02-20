@@ -65,9 +65,6 @@
     }
 
     var VersionSelector = {
-      oncreate: function ({ attrs }) {
-
-      },
       onchange: (e) => {
         const { name, value: newVersion } = e.target;
 
@@ -115,12 +112,16 @@
           name: vnode.attrs.name,
           disabled: vnode.attrs.isLock,
         }, (
-          vnode.attrs.versions.map(version => (
-            m('option', {
-              value: currentVersion,
-              selected: version?.replace(/[\^~]/g, '') === currentVersion,
-            }, version)
-          ))
+          vnode.attrs.versions.map(_version => {
+            var version = _version?.replace(/[\^~]/g, '');
+
+            return (
+              m('option', {
+                value: version,
+                selected: version === currentVersion,
+              }, version)
+            );
+          })
         ))
       }
     }
